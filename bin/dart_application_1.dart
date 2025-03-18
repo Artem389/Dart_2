@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:nativewrappers';
 
 // Константы для размера поля и символов
 const int BOARD_SIZE = 10;
@@ -92,7 +93,7 @@ class Board {
       return true;
     } else if (grid[row][col] == EMPTY) {
       grid[row][col] = MISS;
-                  return false;
+            return false;
     } else {
       // Уже атаковали эту клетку
       return false; // или можно бросить исключение
@@ -176,7 +177,7 @@ void placeComputerShips(Board board) {
 // Функция для получения координат и ориентации от игрока для размещения корабля
 List<dynamic> getShipPlacementFromPlayer(int shipLength) {
   while (true) {
-        stdout.write("Введите координаты начала для корабля длиной $shipLength (например, A1): ");
+    stdout.write(        "Введите координаты начала для корабля длиной $shipLength (например, A1): ");
     String? inputCoordinates = stdin.readLineSync();
     stdout.write("Горизонтально? (y/n): ");
     String? inputOrientation = stdin.readLineSync();
@@ -194,8 +195,9 @@ List<dynamic> getShipPlacementFromPlayer(int shipLength) {
 
     int col;
     try {
-      col = inputCoordinates.codeUnitAt(0) - 65; // Преобразуем букву в индекс (A -> 0, B -> 1, ...)
-      if (col < 0 || col >= BOARD_SIZE){
+      col = inputCoordinates.codeUnitAt(0) -
+          65; // Преобразуем букву в индекс (A -> 0, B -> 1, ...)
+      if (col < 0 || col >= BOARD_SIZE) {
         print("Некорректный ввод координат. Пожалуйста, попробуйте снова.");
         continue;
       }
@@ -204,7 +206,8 @@ List<dynamic> getShipPlacementFromPlayer(int shipLength) {
       continue;
     }
 
-    int? row = int.tryParse(inputCoordinates.substring(1))?.toInt(); // Номер строки
+    int? row = int.tryParse(inputCoordinates.substring(1))
+        ?.toInt(); // Номер строки
     if (row == null || row < 1 || row > BOARD_SIZE) {
       print("Некорректный ввод координат. Пожалуйста, попробуйте снова.");
       continue;
@@ -216,11 +219,51 @@ List<dynamic> getShipPlacementFromPlayer(int shipLength) {
   }
 }
 
+// Класс для хранения статистики игры
+class GameStatistics {
+  int playerShipsLost = 0;
+  int computerShipsLost = 0;
+  int playerHits = 0;
+  int playerMisses = 0
+  ;
+  int computerHits = 0;
+  int computerMisses = 0;
+  int playerShipsRemainingStart = 0;
+  int computerShipsRemainingStart = 0;
+  int playerShipsRemainingEnd = 0;
+  int computerShipsRemainingEnd = 0;
+  bool playerWon = false; // Добавляем флаг для определения победителя.
+
+  // Функция для записи статистики в файл
+  void writeToFile(String filename) {
+    final file = File(filename);
+    final sink = file.openWrite();
+
+    sink.writeln("--- Статистика игры ---");
+    sink.writeln("Победитель: ${playerWon ? 'Игрок' : 'Компьютер'}"); // Записываем, кто победил
+    sink.writeln("Кораблей игрока потеряно: $playerShipsLost");
+    sink.writeln("Кораблей компьютера потеряно: $computerShipsLost");
+    sink.writeln("Попаданий игрока: $playerHits");
+    sink.writeln("Промахов игрока: $playerMisses");
+    sink.writeln("Попаданий компьютера: $computerHits");
+    sink.writeln("Промахов компьютера: $computerMisses");
+    sink.writeln("Кораблей игрока в начале: $playerShipsRemainingStart");
+    sink.writeln("Кораблей компьютера в начале: $computerShipsRemainingStart");
+    sink.writeln("Кораблей игрока в конце: $playerShipsRemainingEnd");
+    sink.writeln("Кораблей компьютера в конце: $computerShipsRemainingEnd");
+
+    sink.close();
+    print("Статистика игры сохранена в файл '$filename'");
+  }
+}
 
 void main() {
   final playerBoard = Board();
   final computerBoard = Board();
   final random = Random();
+
+  // Инициализация статистики
+  final gameStats = GameStatistics();
 
   // Автоматическое размещение кораблей компьютера
   placeComputerShips(computerBoard);
@@ -249,12 +292,15 @@ void main() {
 
   print("Ваши корабли размещены.");
 
+  // Инициализация начальной статистики
+  gameStats.playerShipsRemainingStart = playerBoard.countRemainingShips();
+  gameStats.computerShipsRemainingStart = computerBoard.countRemainingShips();
+
   // Основной игровой цикл
   bool gameOver = false;
   bool playerTurn = true; // Начинает игрок
 
-  while (!gameOver)
-  {
+  while (!gameOver) {
     if (playerTurn) {
       // Ход игрока
       print("\nВаш ход:");
@@ -269,14 +315,17 @@ void main() {
 
       if (hit) {
         print("Попадание!");
+        gameStats.playerHits++;
         // Ход остается у игрока
       } else {
         print("Мимо.");
+        gameStats.playerMisses++;
         playerTurn = false; // Переход хода к компьютеру
       }
 
       if (computerBoard.allShipsSunk()) {
         print("Вы победили!");
+        gameStats.playerWon = true; // Устанавливаем флаг победы игрока.
         gameOver = true;
         break;
       }
@@ -290,15 +339,18 @@ void main() {
         computerCol = random.nextInt(BOARD_SIZE);
 
         computerHit = playerBoard.attack(computerRow, computerCol);
-        if (computerHit){
+        if (computerHit) {
           print("Компьютер попал в ${String.fromCharCode(65 + computerCol)}${computerRow + 1}!");
+          gameStats.computerHits++;
         } else {
+          gameStats.computerMisses++;
           break; // Если промах, выходим из цикла do-while
         }
       } while (computerHit); // Компьютер ходит, пока попадает
 
       if (playerBoard.allShipsSunk()) {
         print("Компьютер победил!");
+        gameStats.playerWon = false; // Устанавливаем флаг победы компьютера.
         gameOver = true;
         break;
       }
@@ -310,21 +362,29 @@ void main() {
   playerBoard.display(hideShips: false);
   computerBoard.display(hideShips: false); // Показываем финальное поле компьютера
 
-  // Вывод статистики
-  int playerShipsRemaining = playerBoard.countRemainingShips();
-  int computerShipsRemaining = computerBoard.countRemainingShips();
+  // Обновление статистики в конце игры
+  gameStats.playerShipsRemainingEnd = playerBoard.countRemainingShips();
+  gameStats.computerShipsRemainingEnd = computerBoard.countRemainingShips();
+  gameStats.playerShipsLost = gameStats.playerShipsRemainingStart - gameStats.playerShipsRemainingEnd;
+  gameStats.computerShipsLost = gameStats.computerShipsRemainingStart - gameStats.computerShipsRemainingEnd;
 
-  print("Статистика:");
-  if (playerBoard.allShipsSunk()){
-    print("У компьютера осталось кораблей: $computerShipsRemaining");
-  } else {
-    print("У вас осталось кораблей: $playerShipsRemaining");
-  }
+  // Вывод статистики в консоль
+  print("\nСтатистика:");
+  print("Победитель: ${gameStats.playerWon ? 'Игрок' : 'Компьютер'}"); // Показываем, кто победил.
+  print("Кораблей игрока потеряно: ${gameStats.playerShipsLost}");
+  print("Кораблей компьютера потеряно: ${gameStats.computerShipsLost}");
+  print("Попаданий игрока: ${gameStats.playerHits}");
+  print("Промахов игрока: ${gameStats.playerMisses}");
+  print("Попаданий компьютера: ${gameStats.computerHits}");
+  print("Промахов компьютера: ${gameStats.computerMisses}");
+  print("Кораблей игрока в начале: ${gameStats.playerShipsRemainingStart}");
+  print("Кораблей компьютера в начале: ${gameStats.computerShipsRemainingStart}");
+  print("Кораблей игрока в конце: ${gameStats.playerShipsRemainingEnd}");
+  print("Кораблей компьютера в конце: ${gameStats.computerShipsRemainingEnd}");
 
+  // Запись статистики в файл
+  gameStats.writeToFile("game_statistics.txt");
 }
-
-
-
 
 
 // A1
@@ -337,3 +397,105 @@ void main() {
 // y
 // A9
 // y
+
+
+// A1
+// A2
+// A3
+// A4
+// A5
+// A6
+// A7
+// A8
+// A9
+// A10
+// B1
+// B2
+// B3
+// B4
+// B5
+// B6
+// B7
+// B8
+// B9
+// B10
+// C1
+// C2
+// C3
+// C4
+// C5
+// C6
+// C7
+// C8
+// C9
+// C10
+// D1
+// D2
+// D3
+// D4
+// D5
+// D6
+// D7
+// D8
+// D9
+// D10
+// E1
+// E2
+// E3
+// E4
+// E5
+// E6
+// E7
+// E8
+// E9
+// E10
+// F1
+// F2
+// F3
+// F4
+// F5
+// F6
+// F7
+// F8
+// F9
+// F10
+// G1
+// G2
+// G3
+// G4
+// G5
+// G6
+// G7
+// G8
+// G9
+// G10
+// H1
+// H2
+// H3
+// H4
+// H5
+// H6
+// H7
+// H8
+// H9
+// H10
+// I1 
+// I2
+// I3 
+// I4
+// I5
+// I6
+// I7
+// I8
+// I9
+// I10
+// J1 
+// J2
+// J3 
+// J4
+// J5
+// J6
+// J7
+// J8
+// J9
+// J10
